@@ -112,13 +112,13 @@
 
       <div class="flex items-center bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 w-full md:w-auto">
         <button onclick="switchViewMode('clean')" id="modeBtnClean" class="flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-sm">
-          <i class="fa-solid fa-circle-check"></i> ข้อมูลจริง (สำเร็จ 9,245 รายการ)
+          <i class="fa-solid fa-circle-check"></i> ข้อมูลขายจริง (คลีน 7 จุดแล้ว 8,099 รายการ)
         </button>
         <button onclick="switchViewMode('raw')" id="modeBtnRaw" class="flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
           <i class="fa-solid fa-layer-group"></i> ข้อมูลดิบทั้งหมด (10,000 รายการ)
         </button>
         <button onclick="switchViewMode('garbage')" id="modeBtnGarbage" class="flex-1 md:flex-initial px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
-          <i class="fa-solid fa-dumpster-fire"></i> ข้อมูลขยะ (755 รายการ)
+          <i class="fa-solid fa-dumpster-fire"></i> ข้อมูลขยะที่คัดออก (1,901 รายการ)
         </button>
       </div>
     </div>
@@ -668,35 +668,35 @@
       const kpiLost = document.getElementById('kpiLost');
 
       if (currentMode === 'clean') {
-        kpiRevTitle.innerText = 'ยอดขายจริงสุทธิ (Realized)';
-        kpiRevenue.innerText = '฿' + kpis.realized_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-        kpiRevSub.innerText = `${kpis.success_rate}% ของยอดรวมดิบ`;
-        kpiOrderTitle.innerText = 'คำสั่งซื้อที่สำเร็จ (Valid)';
-        kpiOrders.innerText = kpis.completed_orders.toLocaleString() + ' รายการ';
-        kpiOrderSub.innerText = '92.45% สำเร็จสมบูรณ์';
-        kpiAov.innerText = '฿' + kpis.aov.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-        kpiUnits.innerText = kpis.units_sold.toLocaleString();
-        kpiLost.innerText = '฿' + kpis.lost_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiRevTitle.innerText = 'ยอดขายจริงสุทธิ (Clean Realized)';
+        kpiRevenue.innerText = '฿' + kpis.clean_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiRevSub.innerText = `${kpis.clean_rate}% หลังคัดขยะ 7 จุดออก`;
+        kpiOrderTitle.innerText = 'คำสั่งซื้อที่ผ่านเกณฑ์คลีน';
+        kpiOrders.innerText = kpis.clean_orders.toLocaleString() + ' รายการ';
+        kpiOrderSub.innerText = '80.99% สะอาดบริสุทธิ์ 100%';
+        kpiAov.innerText = '฿' + kpis.clean_aov.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiUnits.innerText = kpis.clean_units.toLocaleString();
+        kpiLost.innerText = '฿' + kpis.removed_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
       } else if (currentMode === 'raw') {
         kpiRevTitle.innerText = 'ยอดรวมก่อนคัดกรอง (Gross)';
         kpiRevenue.innerText = '฿' + kpis.gross_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
         kpiRevSub.innerText = '100% รวมข้อมูลขยะทั้งหมด';
         kpiOrderTitle.innerText = 'คำสั่งซื้อทั้งหมดในไฟล์ดิบ';
-        kpiOrders.innerText = kpis.total_orders_raw.toLocaleString() + ' รายการ';
-        kpiOrderSub.innerText = 'มีข้อมูลขยะปะปนอยู่ 7.55%';
-        kpiAov.innerText = '฿' + (kpis.gross_revenue / kpis.total_orders_raw).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-        kpiUnits.innerText = (kpis.units_sold + 1380).toLocaleString(); // total approx
-        kpiLost.innerText = '฿' + kpis.lost_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiOrders.innerText = kpis.total_initial_records.toLocaleString() + ' รายการ';
+        kpiOrderSub.innerText = 'มีข้อมูลขยะปะปนอยู่ 19.01%';
+        kpiAov.innerText = '฿' + (kpis.gross_revenue / kpis.total_initial_records).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiUnits.innerText = '18,540';
+        kpiLost.innerText = '฿' + kpis.removed_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
       } else {
-        kpiRevTitle.innerText = 'มูลค่าความสูญเสียจากขยะ';
-        kpiRevenue.innerText = '฿' + kpis.lost_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
-        kpiRevSub.innerText = 'ยกเลิก + คืนสินค้า';
+        kpiRevTitle.innerText = 'มูลค่าขยะที่ถูกคัดออกทั้งหมด';
+        kpiRevenue.innerText = '฿' + kpis.removed_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiRevSub.innerText = 'รวมขยะทั้ง 7 จุด';
         kpiOrderTitle.innerText = 'จำนวนคำสั่งซื้อที่เป็นขยะ';
-        kpiOrders.innerText = (kpis.canceled_orders + kpis.returned_orders).toLocaleString() + ' รายการ';
-        kpiOrderSub.innerText = '7.55% ของข้อมูลทั้งหมด';
-        kpiAov.innerText = '฿' + (kpis.lost_revenue / (kpis.canceled_orders + kpis.returned_orders)).toLocaleString('th-TH', { minimumFractionDigits: 2 });
-        kpiUnits.innerText = '1,380';
-        kpiLost.innerText = '฿' + kpis.lost_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiOrders.innerText = kpis.removed_orders.toLocaleString() + ' รายการ';
+        kpiOrderSub.innerText = '19.01% ของชุดข้อมูลเดิม';
+        kpiAov.innerText = '฿' + (kpis.removed_revenue / kpis.removed_orders).toLocaleString('th-TH', { minimumFractionDigits: 2 });
+        kpiUnits.innerText = '3,481';
+        kpiLost.innerText = '฿' + kpis.removed_revenue.toLocaleString('th-TH', { minimumFractionDigits: 2 });
       }
     }
 

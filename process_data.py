@@ -13,93 +13,97 @@ with open(input_csv, "r", encoding="utf-8-sig", errors="replace") as f:
     rows = list(reader)
 
 total_records = len(rows)
+gross_revenue = sum(float(r["ยอดรวมสุทธิ"]) for r in rows)
 
-# 1. Classification & Garbage Audit
+# Detect Burst simultaneous orders
+cust_minute = Counter((r["รหัสลูกค้า"], r["วันที่สั่งซื้อ"], r["เวลาสั่งซื้อ"]) for r in rows)
+burst_keys = {k for k, v in cust_minute.items() if v > 1}
+
+# Define the 7 Garbage Points
+garbage_point_counts = {
+    "point_1_canceled": 0,
+    "point_2_returned": 0,
+    "point_3_store_cod": 0,
+    "point_4_store_off_hours": 0,
+    "point_5_underage_cc": 0,
+    "point_6_unspecified_gender": 0,
+    "point_7_simultaneous_location": 0,
+}
+
 clean_rows = []
 garbage_rows = []
 
-audit_summary = {
-    "total_records": total_records,
-    "gross_revenue": sum(float(r["ยอดรวมสุทธิ"]) for r in rows),
-    "completed_orders": 0,
-    "completed_revenue": 0.0,
-    "canceled_orders": 0,
-    "canceled_revenue": 0.0,
-    "returned_orders": 0,
-    "returned_revenue": 0.0,
-    "store_cod_anomalies": 0,
-    "unspecified_gender_count": 0,
-    "missing_review_count": 0
-}
-
 for r in rows:
-    total_val = float(r["ยอดรวมสุทธิ"])
+    reasons = []
     status = r["สถานะ"]
     channel = r["ช่องทางการขาย"]
     payment = r["วิธีชำระเงิน"]
+    hour = int(r["เวลาสั่งซื้อ"].split(":")[0])
+    age = int(r["อายุ"])
     gender = r["เพศ"]
-    review = r["คะแนนรีวิว"]
-    
-    if status == "สำเร็จ":
-        clean_rows.append(r)
-        audit_summary["completed_orders"] += 1
-        audit_summary["completed_revenue"] += total_val
-    elif status == "ยกเลิก":
-        garbage_rows.append({**r, "garbage_reason": "คำสั่งซื้อถูกยกเลิก (ไม่เกิดการขายจริง)"})
-        audit_summary["canceled_orders"] += 1
-        audit_summary["canceled_revenue"] += total_val
-    elif status == "คืนสินค้า":
-        garbage_rows.append({**r, "garbage_reason": "คืนสินค้าและคืนเงิน (สูญเสียรายได้)"})
-        audit_summary["returned_orders"] += 1
-        audit_summary["returned_revenue"] += total_val
+    k = (r["รหัสลูกค้า"], r["วันที่สั่งซื้อ"], r["เวลาสั่งซื้อ"])
 
+    # 1. Canceled
+    if status == "ยกเลิก":
+        reasons.append("จุดที่ 1: สถานะยกเลิก (ไม่เกิดการซื้อขายจริง)")
+        garbage_point_counts["point_1_canceled"] += 1
+
+    # 2. Returned
+    if status == "คืนสินค้า":
+        reasons.append("จุดที่ 2: สถานะคืนสินค้า (มีการคืนเงิน)")
+        garbage_point_counts["point_2_returned"] += 1
+
+    # 3. Store COD
     if channel == "หน้าร้าน" and payment == "เก็บเงินปลายทาง":
-        audit_summary["store_cod_anomalies"] += 1
+        reasons.append("จุดที่ 3: ซื้อหน้าร้านแต่ระบุเก็บเงินปลายทาง (ตรรกะ POS ผิดพลาด)")
+        garbage_point_counts["point_3_store_cod"] += 1
 
+    # 4. Store Off-hours
+    if channel == "หน้าร้าน" and (hour < 8 or hour >= 22):
+        reasons.append("จุดที่ 4: ซื้อหน้าร้านนอกเวลาทำการ (22:00 - 07:59 น.)")
+        garbage_point_counts["point_4_store_off_hours"] += 1
+
+    # 5. Underage credit card
+    if age < 18 and payment == "บัตรเครดิต":
+        reasons.append("จุดที่ 5: ผู้เยาว์อายุต่ำกว่า 18 ปีใช้บัตรเครดิต (ขัดต่อระเบียบการเงิน)")
+        garbage_point_counts["point_5_underage_cc"] += 1
+
+    # 6. Unspecified gender
     if gender == "ไม่ระบุ":
-        audit_summary["unspecified_gender_count"] += 1
+        reasons.append("จุดที่ 6: เพศไม่ระบุ (ข้อมูลประชากรไม่สมบูรณ์)")
+        garbage_point_counts["point_6_unspecified_gender"] += 1
 
-    if not review.strip():
-        audit_summary["missing_review_count"] += 1
+    # 7. Simultaneous Location
+    if k in burst_keys:
+        reasons.append("จุดที่ 7: ธุรกรรมชนเวลาต่างสถานที่พร้อมกัน (เป็นไปไม่ได้ทางกายภาพ)")
+        garbage_point_counts["point_7_simultaneous_location"] += 1
 
-audit_summary["lost_revenue"] = audit_summary["canceled_revenue"] + audit_summary["returned_revenue"]
-audit_summary["realized_revenue"] = audit_summary["completed_revenue"]
-audit_summary["real_success_rate"] = round((audit_summary["completed_orders"] / total_records) * 100, 2)
-audit_summary["waste_rate"] = round(((audit_summary["canceled_orders"] + audit_summary["returned_orders"]) / total_records) * 100, 2)
+    if len(reasons) > 0:
+        garbage_rows.append({
+            **r,
+            "garbage_reasons": " | ".join(reasons),
+            "reasons_count": len(reasons)
+        })
+    else:
+        clean_rows.append(r)
 
-# 2. Financial & Sales Metrics for Clean Data
-clean_net_merchandise = sum(float(r["ยอดก่อนค่าส่ง"]) for r in clean_rows)
-clean_shipping_total = sum(float(r["ค่าจัดส่ง"]) for r in clean_rows)
-clean_units_sold = sum(int(r["จำนวน"]) for r in clean_rows)
-clean_aov = audit_summary["realized_revenue"] / len(clean_rows)
+# Financial calculation
+clean_revenue = sum(float(r["ยอดรวมสุทธิ"]) for r in clean_rows)
+clean_net = sum(float(r["ยอดก่อนค่าส่ง"]) for r in clean_rows)
+clean_shipping = sum(float(r["ค่าจัดส่ง"]) for r in clean_rows)
+clean_units = sum(int(r["จำนวน"]) for r in clean_rows)
+garbage_revenue = sum(float(r["ยอดรวมสุทธิ"]) for r in garbage_rows)
 
 reviews_list = [float(r["คะแนนรีวิว"]) for r in clean_rows if r["คะแนนรีวิว"].strip()]
 avg_rating = sum(reviews_list) / len(reviews_list) if reviews_list else 0.0
 
-# 3. Monthly Trends (2024 - 2025)
-monthly_data = defaultdict(lambda: {
-    "real_revenue": 0.0,
-    "gross_revenue": 0.0,
-    "canceled_revenue": 0.0,
-    "returned_revenue": 0.0,
-    "orders": 0,
-    "items": 0
-})
-
-for r in rows:
-    m = r["วันที่สั่งซื้อ"][:7] # YYYY-MM
-    amt = float(r["ยอดรวมสุทธิ"])
-    qty = int(r["จำนวน"])
-    monthly_data[m]["gross_revenue"] += amt
-    
-    if r["สถานะ"] == "สำเร็จ":
-        monthly_data[m]["real_revenue"] += amt
-        monthly_data[m]["orders"] += 1
-        monthly_data[m]["items"] += qty
-    elif r["สถานะ"] == "ยกเลิก":
-        monthly_data[m]["canceled_revenue"] += amt
-    elif r["สถานะ"] == "คืนสินค้า":
-        monthly_data[m]["returned_revenue"] += amt
+# Monthly trends on Clean Data
+monthly_data = defaultdict(lambda: {"real_revenue": 0.0, "orders": 0, "items": 0})
+for r in clean_rows:
+    m = r["วันที่สั่งซื้อ"][:7]
+    monthly_data[m]["real_revenue"] += float(r["ยอดรวมสุทธิ"])
+    monthly_data[m]["orders"] += 1
+    monthly_data[m]["items"] += int(r["จำนวน"])
 
 monthly_sorted = []
 for m in sorted(monthly_data.keys()):
@@ -107,22 +111,17 @@ for m in sorted(monthly_data.keys()):
     monthly_sorted.append({
         "month": m,
         "real_revenue": round(d["real_revenue"], 2),
-        "gross_revenue": round(d["gross_revenue"], 2),
-        "lost_revenue": round(d["canceled_revenue"] + d["returned_revenue"], 2),
         "orders": d["orders"],
         "items": d["items"]
     })
 
-# 4. Categories Analysis (Cleaned Data)
-category_stats = defaultdict(lambda: {"revenue": 0.0, "units": 0, "orders": 0, "products": set()})
+# Categories (Clean Data)
+category_stats = defaultdict(lambda: {"revenue": 0.0, "units": 0, "orders": 0})
 for r in clean_rows:
     cat = r["หมวดสินค้า"]
-    amt = float(r["ยอดรวมสุทธิ"])
-    qty = int(r["จำนวน"])
-    category_stats[cat]["revenue"] += amt
-    category_stats[cat]["units"] += qty
+    category_stats[cat]["revenue"] += float(r["ยอดรวมสุทธิ"])
+    category_stats[cat]["units"] += int(r["จำนวน"])
     category_stats[cat]["orders"] += 1
-    category_stats[cat]["products"].add(r["ชื่อสินค้า"])
 
 categories_list = []
 for cat, s in category_stats.items():
@@ -131,42 +130,27 @@ for cat, s in category_stats.items():
         "revenue": round(s["revenue"], 2),
         "units": s["units"],
         "orders": s["orders"],
-        "product_count": len(s["products"]),
-        "revenue_pct": round((s["revenue"] / audit_summary["realized_revenue"]) * 100, 2)
+        "revenue_pct": round((s["revenue"] / clean_revenue) * 100, 2)
     })
 categories_list.sort(key=lambda x: x["revenue"], reverse=True)
 
-# 5. Top Products (Cleaned Data)
-product_stats = defaultdict(lambda: {
-    "category": "",
-    "revenue": 0.0,
-    "units": 0,
-    "orders": 0,
-    "ratings": [],
-    "unit_price_sum": 0.0,
-    "price_records": 0
-})
-
+# Top Products (Clean Data)
+prod_stats = defaultdict(lambda: {"category": "", "revenue": 0.0, "units": 0, "orders": 0, "ratings": [], "price_sum": 0.0, "count": 0})
 for r in clean_rows:
     p = r["ชื่อสินค้า"]
-    cat = r["หมวดสินค้า"]
-    amt = float(r["ยอดรวมสุทธิ"])
-    qty = int(r["จำนวน"])
-    price = float(r["ราคาต่อหน่วย"])
-    
-    product_stats[p]["category"] = cat
-    product_stats[p]["revenue"] += amt
-    product_stats[p]["units"] += qty
-    product_stats[p]["orders"] += 1
-    product_stats[p]["unit_price_sum"] += price
-    product_stats[p]["price_records"] += 1
+    prod_stats[p]["category"] = r["หมวดสินค้า"]
+    prod_stats[p]["revenue"] += float(r["ยอดรวมสุทธิ"])
+    prod_stats[p]["units"] += int(r["จำนวน"])
+    prod_stats[p]["orders"] += 1
+    prod_stats[p]["price_sum"] += float(r["ราคาต่อหน่วย"])
+    prod_stats[p]["count"] += 1
     if r["คะแนนรีวิว"].strip():
-        product_stats[p]["ratings"].append(float(r["คะแนนรีวิว"]))
+        prod_stats[p]["ratings"].append(float(r["คะแนนรีวิว"]))
 
 top_products = []
-for p, s in product_stats.items():
+for p, s in prod_stats.items():
     avg_r = sum(s["ratings"]) / len(s["ratings"]) if s["ratings"] else 0.0
-    avg_p = s["unit_price_sum"] / s["price_records"] if s["price_records"] else 0.0
+    avg_p = s["price_sum"] / s["count"] if s["count"] else 0.0
     top_products.append({
         "product": p,
         "category": s["category"],
@@ -174,12 +158,11 @@ for p, s in product_stats.items():
         "units": s["units"],
         "orders": s["orders"],
         "avg_price": round(avg_p, 2),
-        "avg_rating": round(avg_r, 2),
-        "review_count": len(s["ratings"])
+        "avg_rating": round(avg_r, 2)
     })
 top_products.sort(key=lambda x: x["revenue"], reverse=True)
 
-# 6. Channel Breakdown
+# Channels (Clean Data)
 channel_stats = defaultdict(lambda: {"revenue": 0.0, "orders": 0, "units": 0})
 for r in clean_rows:
     ch = r["ช่องทางการขาย"]
@@ -194,12 +177,11 @@ for ch, s in channel_stats.items():
         "revenue": round(s["revenue"], 2),
         "orders": s["orders"],
         "units": s["units"],
-        "aov": round(s["revenue"] / s["orders"], 2),
-        "share_pct": round((s["revenue"] / audit_summary["realized_revenue"]) * 100, 2)
+        "share_pct": round((s["revenue"] / clean_revenue) * 100, 2)
     })
 channels_list.sort(key=lambda x: x["revenue"], reverse=True)
 
-# 7. Payment Methods Breakdown
+# Payments (Clean Data)
 payment_stats = defaultdict(lambda: {"revenue": 0.0, "orders": 0})
 for r in clean_rows:
     pay = r["วิธีชำระเงิน"]
@@ -212,31 +194,32 @@ for pay, s in payment_stats.items():
         "payment": pay,
         "revenue": round(s["revenue"], 2),
         "orders": s["orders"],
-        "share_pct": round((s["revenue"] / audit_summary["realized_revenue"]) * 100, 2)
+        "share_pct": round((s["revenue"] / clean_revenue) * 100, 2)
     })
 payments_list.sort(key=lambda x: x["revenue"], reverse=True)
 
-# 8. Regional & Top Provinces
+# Regions (Clean Data)
 region_stats = defaultdict(lambda: {"revenue": 0.0, "orders": 0})
-province_stats = defaultdict(lambda: {"revenue": 0.0, "orders": 0, "region": ""})
-
 for r in clean_rows:
     reg = r["ภาค"]
-    prov = r["จังหวัด"]
-    amt = float(r["ยอดรวมสุทธิ"])
-    region_stats[reg]["revenue"] += amt
+    region_stats[reg]["revenue"] += float(r["ยอดรวมสุทธิ"])
     region_stats[reg]["orders"] += 1
-    province_stats[prov]["revenue"] += amt
-    province_stats[prov]["orders"] += 1
-    province_stats[prov]["region"] = reg
 
 regions_list = [{"region": k, "revenue": round(v["revenue"], 2), "orders": v["orders"]} for k, v in region_stats.items()]
 regions_list.sort(key=lambda x: x["revenue"], reverse=True)
 
-provinces_list = [{"province": k, "region": v["region"], "revenue": round(v["revenue"], 2), "orders": v["orders"]} for k, v in province_stats.items()]
+# Top 10 Provinces
+prov_stats = defaultdict(lambda: {"revenue": 0.0, "orders": 0, "region": ""})
+for r in clean_rows:
+    p = r["จังหวัด"]
+    prov_stats[p]["revenue"] += float(r["ยอดรวมสุทธิ"])
+    prov_stats[p]["orders"] += 1
+    prov_stats[p]["region"] = r["ภาค"]
+
+provinces_list = [{"province": k, "region": v["region"], "revenue": round(v["revenue"], 2), "orders": v["orders"]} for k, v in prov_stats.items()]
 provinces_list.sort(key=lambda x: x["revenue"], reverse=True)
 
-# 9. Demographics (Age groups & Gender)
+# Demographics (Clean Data)
 age_groups = {
     "วัยรุ่น (< 20)": {"orders": 0, "revenue": 0.0},
     "วัยเริ่มทำงาน (20-29)": {"orders": 0, "revenue": 0.0},
@@ -273,13 +256,9 @@ for r in clean_rows:
 age_list = [{"group": k, "orders": v["orders"], "revenue": round(v["revenue"], 2)} for k, v in age_groups.items()]
 gender_list = [{"gender": k, "orders": v["orders"], "revenue": round(v["revenue"], 2)} for k, v in gender_stats.items()]
 
-# 10. Shipping Days Breakdown
-delivery_stats = Counter(int(r["จำนวนวันจัดส่ง"]) for r in clean_rows)
-delivery_list = [{"days": f"{k} วัน" if k > 0 else "รับทันที (หน้าร้าน)", "orders": v} for k, v in sorted(delivery_stats.items())]
-
-# 11. Prepare sample clean orders and sample garbage orders for UI table
+# Sample orders for table
 sample_orders = []
-for r in rows[:1000]: # First 1000 orders for interactive table
+for r in clean_rows[:1000]:
     sample_orders.append({
         "id": r["รหัสคำสั่งซื้อ"],
         "date": r["วันที่สั่งซื้อ"],
@@ -304,23 +283,20 @@ for r in rows[:1000]: # First 1000 orders for interactive table
 
 dashboard_data = {
     "kpis": {
-        "gross_revenue": round(audit_summary["gross_revenue"], 2),
-        "realized_revenue": round(audit_summary["realized_revenue"], 2),
-        "lost_revenue": round(audit_summary["lost_revenue"], 2),
-        "net_merchandise": round(clean_net_merchandise, 2),
-        "shipping_total": round(clean_shipping_total, 2),
-        "total_orders_raw": total_records,
-        "completed_orders": len(clean_rows),
-        "canceled_orders": audit_summary["canceled_orders"],
-        "returned_orders": audit_summary["returned_orders"],
-        "units_sold": clean_units_sold,
-        "aov": round(clean_aov, 2),
-        "success_rate": audit_summary["real_success_rate"],
-        "waste_rate": audit_summary["waste_rate"],
+        "gross_revenue": round(gross_revenue, 2),
+        "clean_revenue": round(clean_revenue, 2),
+        "removed_revenue": round(garbage_revenue, 2),
+        "clean_net_merchandise": round(clean_net, 2),
+        "clean_shipping": round(clean_shipping, 2),
+        "total_initial_records": total_records,
+        "clean_orders": len(clean_rows),
+        "removed_orders": len(garbage_rows),
+        "clean_units": clean_units,
+        "clean_aov": round(clean_revenue / len(clean_rows), 2),
+        "clean_rate": round((len(clean_rows) / total_records) * 100, 2),
+        "garbage_rate": round((len(garbage_rows) / total_records) * 100, 2),
         "avg_rating": round(avg_rating, 2),
-        "store_cod_anomalies": audit_summary["store_cod_anomalies"],
-        "unspecified_gender_count": audit_summary["unspecified_gender_count"],
-        "missing_review_count": audit_summary["missing_review_count"]
+        "points": garbage_point_counts
     },
     "monthly": monthly_sorted,
     "categories": categories_list,
@@ -331,35 +307,29 @@ dashboard_data = {
     "provinces": provinces_list[:10],
     "age_groups": age_list,
     "genders": gender_list,
-    "delivery": delivery_list,
     "sample_orders": sample_orders
 }
 
-# Save JSON and JS files
-json_path = os.path.join(output_dir, "dashboard_data.json")
-with open(json_path, "w", encoding="utf-8") as f:
+# Export outputs
+with open(os.path.join(output_dir, "dashboard_data.json"), "w", encoding="utf-8") as f:
     json.dump(dashboard_data, f, ensure_ascii=False, indent=2)
 
-js_path = os.path.join(output_dir, "dashboard_data.js")
-with open(js_path, "w", encoding="utf-8") as f:
+with open(os.path.join(output_dir, "dashboard_data.js"), "w", encoding="utf-8") as f:
     f.write("const DASHBOARD_DATA = " + json.dumps(dashboard_data, ensure_ascii=False) + ";\n")
 
-# Save cleaned CSV
-clean_csv_path = os.path.join(output_dir, "cleaned_sales_data.csv")
-with open(clean_csv_path, "w", encoding="utf-8-sig", newline="") as f:
+# Cleaned CSV
+with open(os.path.join(output_dir, "cleaned_sales_data.csv"), "w", encoding="utf-8-sig", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(clean_rows)
 
-# Save garbage CSV
-garbage_csv_path = os.path.join(output_dir, "garbage_sales_data.csv")
-with open(garbage_csv_path, "w", encoding="utf-8-sig", newline="") as f:
-    writer = csv.DictWriter(f, fieldnames=fieldnames + ["garbage_reason"])
+# Garbage CSV
+with open(os.path.join(output_dir, "garbage_sales_data.csv"), "w", encoding="utf-8-sig", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=fieldnames + ["garbage_reasons", "reasons_count"])
     writer.writeheader()
     writer.writerows(garbage_rows)
 
-print("SUCCESS: Data processed and exported successfully!")
-print(f"Clean CSV rows: {len(clean_rows)}")
-print(f"Garbage CSV rows: {len(garbage_rows)}")
-print(f"Realized Revenue: {audit_summary['realized_revenue']:,.2f} THB")
-print(f"Lost Revenue: {audit_summary['lost_revenue']:,.2f} THB")
+print("SUCCESS: 7 Garbage Points fully removed!")
+print(f"Pristine Clean Orders: {len(clean_rows)}")
+print(f"Total Garbage Orders Removed: {len(garbage_rows)}")
+print(f"Clean Realized Revenue: {clean_revenue:,.2f} THB")
