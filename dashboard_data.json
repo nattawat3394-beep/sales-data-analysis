@@ -16,7 +16,10 @@
     "avg_rating": 4.28,
     "store_cod_anomalies": 402,
     "unspecified_gender_count": 197,
-    "missing_review_count": 1905
+    "missing_review_count": 1905,
+    "canceled_with_days": 364,
+    "store_off_hours": 501,
+    "underage_credit_card": 256
   },
   "monthly": [
     {

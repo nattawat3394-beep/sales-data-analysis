@@ -252,6 +252,50 @@
           <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">ต้องจัดการ Imputation ก่อนทำโมเดล ML</p>
         </div>
 
+        <!-- Audit 5: Contradictory Delivery -->
+        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+          <div class="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-1.5">
+            <span class="text-xs font-bold uppercase tracking-wider">ยกเลิกแต่มีวันจัดส่ง</span>
+            <i class="fa-solid fa-truck-ramp-box"></i>
+          </div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">364 <span class="text-xs font-normal text-slate-500">รายการ</span></div>
+          <p class="text-xs text-purple-600 dark:text-purple-400 mt-1 font-medium">ขัดแย้งกับหลักการขนส่ง</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">ออเดอร์ยกเลิกแต่กลับมีวันจัดส่ง 1-6 วัน</p>
+        </div>
+
+        <!-- Audit 6: Store Off-hours -->
+        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+          <div class="flex items-center justify-between text-cyan-600 dark:text-cyan-400 mb-1.5">
+            <span class="text-xs font-bold uppercase tracking-wider">หน้าร้านนอกเวลาเปิด</span>
+            <i class="fa-solid fa-clock"></i>
+          </div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">501 <span class="text-xs font-normal text-slate-500">รายการ</span></div>
+          <p class="text-xs text-cyan-600 dark:text-cyan-400 mt-1 font-medium">เวลา 22:00 - 07:59 น.</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">บันทึกซื้อหน้าร้านตอนตี 1 - ตี 4</p>
+        </div>
+
+        <!-- Audit 7: Underage Credit Card -->
+        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+          <div class="flex items-center justify-between text-teal-600 dark:text-teal-400 mb-1.5">
+            <span class="text-xs font-bold uppercase tracking-wider">ผู้เยาว์ (<18) รูดบัตร</span>
+            <i class="fa-solid fa-id-card"></i>
+          </div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">256 <span class="text-xs font-normal text-slate-500">รายการ</span></div>
+          <p class="text-xs text-teal-600 dark:text-teal-400 mt-1 font-medium">อายุ 15 ปี รูดบัตร 165 ครั้ง</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">ขัดแย้งกับเกณฑ์การเปิดบัตรเครดิต</p>
+        </div>
+
+        <!-- Audit 8: Simultaneous Location -->
+        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+          <div class="flex items-center justify-between text-orange-600 dark:text-orange-400 mb-1.5">
+            <span class="text-xs font-bold uppercase tracking-wider">สั่งซื้อชนเวลาต่างที่</span>
+            <i class="fa-solid fa-location-crosshairs"></i>
+          </div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">ตรวจพบ <span class="text-xs font-normal text-slate-500">Burst Anomaly</span></div>
+          <p class="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">เช่น ลูกค้า C00636</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">ซื้อที่หน้าร้านและโซเชียลในนาทีเดียวกัน (09:18)</p>
+        </div>
+
       </div>
     </div>
 
@@ -1163,3 +1207,4 @@
   </script>
 </body>
 </html>
+
